@@ -26,6 +26,8 @@ app.use(cors({
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
   allowedHeaders: ['Content-Type', 'Authorization'],
 }));
+app.set("trust proxy", 1); // Trust first proxy for rate limiting and secure cookies
+
 
 // Rate limiting: 100 requests per 15 minutes per IP
 const limiter = rateLimit({
