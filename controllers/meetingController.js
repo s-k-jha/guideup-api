@@ -18,7 +18,7 @@ const joinMeeting = async (req, res) => {
 
     const now = new Date()
 
-    const meetingStart = new Date(`${booking.date}T${booking.startTime}`)
+    const meetingStart = new Date(`${booking.date}T${booking.startTime}:00+05:30`)
 
     const joinAllowed = new Date(meetingStart.getTime() - 5 * 60 * 1000)
 
@@ -31,11 +31,11 @@ const joinMeeting = async (req, res) => {
       await booking.save()
     }
 
-      return successResponse(res, {
-          meetingLink: booking.meetingLink,
-          date: booking.date,
-          startTime: booking.startTime
-      })
+    return successResponse(res, {
+      meetingLink: booking.meetingLink,
+      date: booking.date,
+      startTime: booking.startTime
+    })
 
   } catch (error) {
     return errorResponse(res, error.message, 500)
