@@ -268,12 +268,11 @@ const sendMentorSessionAssignedEmail = async (booking) => {
   </div>
   `
 
-  await transporter.sendMail({
-    from: `"Guideup" <${process.env.EMAIL_USER}>`,
-    to: mentorId.email,
-    subject: `📅 New session assigned – ${sessionId.title}`,
-    html
-  })
+  await sendEmail({
+  to: mentorId.email,
+  subject: `📅 New session assigned – ${sessionId.title}`,
+  html
+})
 
 }
 module.exports = {
