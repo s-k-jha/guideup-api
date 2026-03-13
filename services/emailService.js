@@ -1,5 +1,5 @@
 const transporter = require('../config/nodemailer')
-
+const { sendEmail } = require('./resendService')
 /**
  * Generates Guideup meeting page link
  */
@@ -52,12 +52,18 @@ const sendBookingConfirmation = async (booking) => {
   </div>
   `
 
-  await transporter.sendMail({
-    from: `"Guideup" <${process.env.EMAIL_USER}>`,
+  // await transporter.sendMail({
+  //   from: `"Guideup" <${process.env.EMAIL_USER}>`,
+  //   to: userId.email,
+  //   subject: `✅ Booking Confirmed – ${sessionId.title}`,
+  //   html
+  // })
+  await sendEmail({
     to: userId.email,
     subject: `✅ Booking Confirmed – ${sessionId.title}`,
-    html
+    html,
   })
+
 }
 
 
@@ -119,12 +125,18 @@ const sendMentorAssignedEmail = async (booking) => {
   </div>
   `
 
-  await transporter.sendMail({
-    from: `"Guideup" <${process.env.EMAIL_USER}>`,
+  // await transporter.sendMail({
+  //   from: `"Guideup" <${process.env.EMAIL_USER}>`,
+  //   to: userId.email,
+  //   subject: `👤 Mentor Assigned – ${sessionId.title}`,
+  //   html
+  // })
+  await sendEmail({
     to: userId.email,
     subject: `👤 Mentor Assigned – ${sessionId.title}`,
-    html
+    html,
   })
+  
 }
 
 
@@ -189,12 +201,17 @@ const sendReminderEmail = async (booking) => {
   </div>
   `
 
-  await transporter.sendMail({
-    from: `"Guideup" <${process.env.EMAIL_USER}>`,
-    to: userId.email,
-    subject: `⏰ Reminder: Your session is coming up – ${sessionId.title}`,
-    html
-  })
+  // await transporter.sendMail({
+  //   from: `"Guideup" <${process.env.EMAIL_USER}>`,
+  //   to: userId.email,
+  //   subject: `⏰ Reminder: Your session is coming up – ${sessionId.title}`,
+  //   html
+  // })
+  await sendEmail({
+  to: userId.email,
+  subject: `⏰ Reminder: Your session is coming up – ${sessionId.title}`,
+  html,
+})
 }
 const sendMentorSessionAssignedEmail = async (booking) => {
 
