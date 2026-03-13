@@ -52,7 +52,7 @@ const createPaymentOrder = async (req, res) => {
       });
 
       const populatedBooking = await Booking.findById(booking._id).populate('userId sessionId');
-      // await emailService.sendBookingConfirmation(populatedBooking);
+      await emailService.sendBookingConfirmation(populatedBooking);
 
       if (couponCode && couponResult.valid) {
         await incrementCouponUsage(couponCode);
@@ -150,7 +150,7 @@ const verifyPayment = async (req, res) => {
 
     // Send confirmation email
     const populatedBooking = await Booking.findById(booking._id).populate('userId sessionId mentorId');
-    // await emailService.sendBookingConfirmation(populatedBooking);
+    await emailService.sendBookingConfirmation(populatedBooking);
 
     return successResponse(res, {
       bookingId: booking._id,
