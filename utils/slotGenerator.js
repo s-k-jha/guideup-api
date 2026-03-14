@@ -14,10 +14,12 @@ const minutesToTime = (totalMinutes) => {
   const m = totalMinutes % 60;
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 };
+// Filter past slots if selected date is today
 const filterPastSlots = (slots, selectedDate) => {
+
   const today = new Date().toISOString().split("T")[0];
 
-  // If user selected future date → no filtering needed
+  // Future date → no filtering needed
   if (selectedDate !== today) {
     return slots;
   }
@@ -26,11 +28,12 @@ const filterPastSlots = (slots, selectedDate) => {
   const currentMinutes = now.getHours() * 60 + now.getMinutes();
 
   return slots.map((slot) => {
-    const [hours, minutes] = slot.time.split(":").map(Number);
-    const slotMinutes = hours * 60 + minutes;
 
-    // If slot time already passed → mark unavailable
-    if (slotMinutes <= currentMinutes) {
+    const [hours, minutes] = slot.time.split(":").map(Number);
+    const slotStartMinutes = hours * 60 + minutes;
+
+    // If slot already started → mark unavailable
+    if (slotStartMinutes <= currentMinutes) {
       return {
         ...slot,
         available: false
@@ -38,7 +41,9 @@ const filterPastSlots = (slots, selectedDate) => {
     }
 
     return slot;
+
   });
+
 };
 /**
  * Generates candidate slot start times within working hours.
