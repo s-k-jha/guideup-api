@@ -14,7 +14,20 @@ const minutesToTime = (totalMinutes) => {
   const m = totalMinutes % 60;
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 };
+const filterPastSlots = (slots, selectedDate) => {
+  const today = new Date().toISOString().split('T')[0]
 
+  if (selectedDate !== today) {
+    return slots
+  }
+
+  const now = new Date()
+  const currentMinutes = now.getHours() * 60 + now.getMinutes()
+
+  return slots.filter((slot) => {
+    return timeToMinutes(slot) > currentMinutes
+  })
+}
 /**
  * Generates candidate slot start times within working hours.
  * @param {string} startTime - Working hours start e.g. "18:00"
@@ -92,4 +105,5 @@ module.exports = {
   generateCandidateSlots,
   hasOverlap,
   computeAvailability,
+  filterPastSlots,
 };
