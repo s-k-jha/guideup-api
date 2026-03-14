@@ -15,19 +15,31 @@ const minutesToTime = (totalMinutes) => {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 };
 const filterPastSlots = (slots, selectedDate) => {
-  const today = new Date().toISOString().split('T')[0]
+  const today = new Date().toISOString().split("T")[0];
 
+  // If user selected future date → no filtering needed
   if (selectedDate !== today) {
-    return slots
+    return slots;
   }
 
-  const now = new Date()
-  const currentMinutes = now.getHours() * 60 + now.getMinutes()
+  const now = new Date();
+  const currentMinutes = now.getHours() * 60 + now.getMinutes();
 
-  return slots.filter((slot) => {
-    return timeToMinutes(slot) > currentMinutes
-  })
-}
+  return slots.map((slot) => {
+    const [hours, minutes] = slot.time.split(":").map(Number);
+    const slotMinutes = hours * 60 + minutes;
+
+    // If slot time already passed → mark unavailable
+    if (slotMinutes <= currentMinutes) {
+      return {
+        ...slot,
+        available: false
+      };
+    }
+
+    return slot;
+  });
+};
 /**
  * Generates candidate slot start times within working hours.
  * @param {string} startTime - Working hours start e.g. "18:00"
