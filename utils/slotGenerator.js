@@ -1,61 +1,39 @@
 /**
- * Converts HH:MM time string to total minutes since midnight.
+ * Converts HH:MM time string to total minutes since midnight
  */
 const timeToMinutes = (time) => {
-  const [hours, minutes] = time.split(':').map(Number);
+  const [hours, minutes] = time.split(":").map(Number);
   return hours * 60 + minutes;
 };
 
 /**
- * Converts minutes since midnight back to HH:MM string.
+ * Converts minutes since midnight back to HH:MM
  */
 const minutesToTime = (totalMinutes) => {
   const h = Math.floor(totalMinutes / 60);
   const m = totalMinutes % 60;
-  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 };
-// Filter past slots if selected date is today
-const filterPastSlots = (slots, selectedDate) => {
 
-  const today = new Date().toISOString().split("T")[0];
-
-  // Future date → no filtering needed
-  if (selectedDate !== today) {
-    return slots;
-  }
-
-  const now = new Date();
-  const currentMinutes = now.getHours() * 60 + now.getMinutes();
-
-  return slots.map((slot) => {
-
-    const [hours, minutes] = slot.time.split(":").map(Number);
-    const slotStartMinutes = hours * 60 + minutes;
-
-    // If slot already started → mark unavailable
-    if (slotStartMinutes <= currentMinutes) {
-      return {
-        ...slot,
-        available: false
-      };
-    }
-
-    return slot;
-
-  });
-
-};
 /**
- * Generates candidate slot start times within working hours.
- * @param {string} startTime - Working hours start e.g. "18:00"
- * @param {string} endTime - Working hours end e.g. "21:00"
- * @param {number} durationMinutes - Duration of the requested session
- * @param {number} resolutionMinutes - Grid resolution (default 15)
- * @returns {string[]} Array of HH:MM candidate slot times
+ * Minimum advance booking buffer
+ * Industry standard: 30 minutes
  */
-const generateCandidateSlots = (startTime, endTime, durationMinutes, resolutionMinutes = 15) => {
+const BOOKING_BUFFER_MINUTES = 30;
+
+/**
+ * Generates candidate slots between working hours
+ */
+const generateCandidateSlots = (
+  startTime,
+  endTime,
+  durationMinutes,
+  resolutionMinutes = 15
+) => {
   const start = timeToMinutes(startTime);
   const end = timeToMinutes(endTime);
+
   const slots = [];
 
   for (let t = start; t + durationMinutes <= end; t += resolutionMinutes) {
@@ -66,12 +44,12 @@ const generateCandidateSlots = (startTime, endTime, durationMinutes, resolutionM
 };
 
 /**
- * Checks if a proposed slot overlaps with an existing booking.
- * Overlap condition: existing.startTime < newEndTime AND existing.endTime > newStartTime
+ * Detects overlap between two time ranges
  */
 const hasOverlap = (existingStart, existingEnd, newStart, newEnd) => {
   const exS = timeToMinutes(existingStart);
   const exE = timeToMinutes(existingEnd);
+
   const nS = timeToMinutes(newStart);
   const nE = timeToMinutes(newEnd);
 
@@ -79,31 +57,30 @@ const hasOverlap = (existingStart, existingEnd, newStart, newEnd) => {
 };
 
 /**
- * Builds the availability array for a given date.
- * @param {string[]} candidateSlots - Array of HH:MM strings
- * @param {object[]} existingBookings - Bookings from DB with startTime and endTime fields
- * @param {number} durationMinutes - Requested session duration
- * @param {object[]} slotLocks - In-memory slot locks array
- * @param {string} date - Date string YYYY-MM-DD
- * @returns {object[]} Array of { time, available } objects
+ * Computes availability considering bookings + locks
  */
-const computeAvailability = (candidateSlots, existingBookings, durationMinutes, slotLocks = [], date) => {
+const computeAvailability = (
+  candidateSlots,
+  existingBookings,
+  durationMinutes,
+  slotLocks = [],
+  date
+) => {
   const now = Date.now();
 
-  // Filter active locks (not expired) for this date
   const activeLocks = slotLocks.filter(
     (lock) => lock.date === date && lock.expiresAt > now
   );
 
   return candidateSlots.map((slotTime) => {
-    const slotEndTime = minutesToTime(timeToMinutes(slotTime) + durationMinutes);
+    const slotEndTime = minutesToTime(
+      timeToMinutes(slotTime) + durationMinutes
+    );
 
-    // Check against confirmed/processing bookings
     const bookedOverlap = existingBookings.some((booking) =>
       hasOverlap(booking.startTime, booking.endTime, slotTime, slotEndTime)
     );
 
-    // Check against active locks
     const lockedOverlap = activeLocks.some((lock) =>
       hasOverlap(lock.startTime, lock.endTime, slotTime, slotEndTime)
     );
@@ -114,6 +91,45 @@ const computeAvailability = (candidateSlots, existingBookings, durationMinutes, 
       available: !bookedOverlap && !lockedOverlap,
     };
   });
+};
+
+/**
+ * Filters past slots and applies booking buffer
+ * Timezone safe for India (Render runs in UTC)
+ */
+const filterPastSlots = (slots, selectedDate) => {
+
+  const today = new Date().toLocaleDateString("en-CA", {
+    timeZone: "Asia/Kolkata",
+  });
+
+  if (selectedDate !== today) {
+    return slots;
+  }
+
+  const now = new Date(
+    new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" })
+  );
+
+  const currentMinutes = now.getHours() * 60 + now.getMinutes();
+
+  const cutoff = currentMinutes + BOOKING_BUFFER_MINUTES;
+
+  return slots.map((slot) => {
+
+    const slotStartMinutes = timeToMinutes(slot.time);
+
+    if (slotStartMinutes <= cutoff) {
+      return {
+        ...slot,
+        available: false,
+      };
+    }
+
+    return slot;
+
+  });
+
 };
 
 module.exports = {
