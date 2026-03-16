@@ -28,7 +28,12 @@ const createPaymentOrder = async (req, res) => {
     // Apply coupon if provided
     const couponResult = await validateAndApplyCoupon(couponCode, session.price);
     const finalPrice = couponResult.finalPrice;
-    const amountInPaise = Math.round(finalPrice * 100);
+    let amountInPaise = Math.round(finalPrice * 100);
+
+    // Fix floating price issues (100% coupon cases)
+    if (finalPrice <= 0 || amountInPaise < 1) {
+      amountInPaise = 0;
+    }    
 
     // Handle free sessions
     if (amountInPaise === 0) {
