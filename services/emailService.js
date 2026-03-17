@@ -275,9 +275,38 @@ const sendMentorSessionAssignedEmail = async (booking) => {
 })
 
 }
+const sendAdminBookingAlert = async (booking) => {
+
+  const user = booking.userId
+  const session = booking.sessionId
+
+  const subject = "🚨 New Booking Alert - Guideup"
+
+  const text = `
+New Booking Received!
+
+👤 Name: ${user.name}
+📧 Email: ${user.email}
+📱 Phone: ${user.phone}
+
+📚 Session: ${session.title}
+📅 Date: ${booking.date}
+⏰ Time: ${booking.startTime}
+💰 Amount: ₹${booking.amountPaid}
+
+👉 Go to dashboard and assign mentor ASAP
+`
+
+  await sendEmail({
+    to: process.env.ADMIN_EMAIL,
+    subject,
+    text
+  })
+}
 module.exports = {
   sendBookingConfirmation,
   sendMentorAssignedEmail,
   sendReminderEmail,
-  sendMentorSessionAssignedEmail
+  sendMentorSessionAssignedEmail,
+  sendAdminBookingAlert,
 }
