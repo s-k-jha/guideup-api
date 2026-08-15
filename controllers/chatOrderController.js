@@ -4,7 +4,7 @@ const Mentor = require('../models/Mentor');
 const User = require('../models/User');
 const WalletTransaction = require('../models/WalletTransaction');
 const { createOrder, verifySignature } = require('../services/paymentService');
-const { notifyMentorNewChat } = require('../services/socketService');
+const { notifyMentorNewChat, completeChatOrder } = require('../services/socketService');
 const { successResponse, errorResponse } = require('../utils/apiResponse');
 
 /**
@@ -220,6 +220,60 @@ const getAdminChatOrders = async (req, res) => {
 };
 
 /**
+ * GET /api/admin/chat-orders/busy-mentors
+ * protect (admin)
+ * Lists mentors currently showing as busy, with whatever chat order they're
+ * pinned to — the admin queue for spotting a mentor stuck busy after a chat
+ * actually ended.
+ */
+const getBusyMentors = async (req, res) => {
+  try {
+    const mentors = await Mentor.find({ availabilityStatus: 2 })
+      .select('name email photoUrl activeChatOrderId lastActiveAt')
+      .populate({
+        path: 'activeChatOrderId',
+        select: 'tier status createdAt userId',
+        populate: { path: 'userId', select: 'name email' },
+      })
+      .sort({ lastActiveAt: -1 });
+
+    return successResponse(res, { mentors });
+  } catch (error) {
+    return errorResponse(res, error.message, 500);
+  }
+};
+
+/**
+ * POST /api/admin/chat-orders/busy-mentors/:id/refresh
+ * protect (admin)
+ * Force-resets a stuck mentor back to online: completes their linked chat
+ * order if it's still open, then unconditionally clears busy/activeChatOrderId
+ * regardless of what state they were actually in. Doesn't delete anything —
+ * purely a state reset for when a chat ended but the mentor never unstuck.
+ */
+const forceRefreshMentor = async (req, res) => {
+  try {
+    const mentor = await Mentor.findById(req.params.id);
+    if (!mentor) return errorResponse(res, 'Mentor not found', 404);
+
+    if (mentor.activeChatOrderId) {
+      await completeChatOrder(mentor.activeChatOrderId.toString());
+    }
+
+    const updated = await Mentor.findById(req.params.id);
+    if (updated.availabilityStatus !== 1 || updated.activeChatOrderId) {
+      updated.availabilityStatus = 1;
+      updated.activeChatOrderId = null;
+      await updated.save();
+    }
+
+    return successResponse(res, { mentor: updated }, 'Mentor refreshed and marked online');
+  } catch (error) {
+    return errorResponse(res, error.message, 500);
+  }
+};
+
+/**
  * GET /api/chat-orders/:id
  * protectChatParticipant
  */
@@ -259,6 +313,8 @@ module.exports = {
   verifyChatPayment,
   getMyChatOrders,
   getAdminChatOrders,
+  getBusyMentors,
+  forceRefreshMentor,
   getChatOrderDetails,
   getChatMessages,
 };
