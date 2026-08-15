@@ -8,9 +8,10 @@ const getPublicMentors = async (req, res) => {
       filter.mentorType = req.query.type;
     }
     if (req.query.type === 'talk') {
-      // Only surface online talk mentors on the connect listing; busy (2) and
-      // offline/unavailable (0) talk mentors must not appear here.
-      filter.availabilityStatus = 1;
+      // Online (1) and busy (2) talk mentors are both shown so students can
+      // see the full active panel; offline/unavailable (0) mentors never
+      // appear on the public connect listing.
+      filter.availabilityStatus = { $in: [1, 2] };
     }
 
     const mentors = await Mentor.find(filter)
