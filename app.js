@@ -23,6 +23,7 @@ const articleRoutes = require('./routes/articleRoutes');
 const adminArticleRoutes = require('./routes/adminArticleRoutes');
 const sitemapRoutes = require('./routes/sitemapRoutes');
 const userAuthRoutes = require('./routes/userAuthRoutes');
+const mentorAuthRoutes = require('./routes/mentorAuthRoutes');
 const chatOrderRoutes = require('./routes/chatOrderRoutes');
 const adminChatOrderRoutes = require('./routes/adminChatOrderRoutes');
 
@@ -92,6 +93,7 @@ app.use('/api/articles', articleRoutes);          // Public published articles
 app.use('/api/admin/articles', adminArticleRoutes); // Admin article CMS
 app.use('/api/sitemap-data', sitemapRoutes);      // GET sitemap data
 app.use('/api/auth', userAuthRoutes);             // Student register/login/me
+app.use('/api/mentor-auth', mentorAuthRoutes);    // Mentor self-service login/profile/status
 app.use('/api/chat-orders', chatOrderRoutes);     // Student "talk to a mentor" chat orders
 app.use('/api/admin/chat-orders', adminChatOrderRoutes); // Admin chat order visibility
 
