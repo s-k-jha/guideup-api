@@ -7,9 +7,14 @@ const getPublicMentors = async (req, res) => {
     if (req.query.type) {
       filter.mentorType = req.query.type;
     }
+    if (req.query.type === 'talk') {
+      // Only surface online talk mentors on the connect listing; busy (2) and
+      // offline/unavailable (0) talk mentors must not appear here.
+      filter.availabilityStatus = 1;
+    }
 
     const mentors = await Mentor.find(filter)
-      .select('name slug photoUrl role company experienceYears bio domains skills mentorType chatPrice discountPrice')
+      .select('name slug photoUrl linkedinUrl role company experienceYears bio domains skills mentorType chatPrice discountPrice offers availabilityStatus')
       .sort({ createdAt: -1 });
 
     return successResponse(res, { mentors });

@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const validator = require('validator');
+const bcrypt = require('bcryptjs');
 
 const mentorSchema = new mongoose.Schema(
   {
@@ -111,6 +112,18 @@ const mentorSchema = new mongoose.Schema(
       type: String,
       default: null,
     },
+    password: {
+      type: String,
+      minlength: 8,
+      select: false,
+    },
+    // 0 = unavailable/offline, 1 = online (available for new chats), 2 = busy (currently in a chat).
+    // Meaningful only for mentorType: 'talk' mentors; harmless default for interview_panel mentors.
+    availabilityStatus: {
+      type: Number,
+      enum: [0, 1, 2],
+      default: 0,
+    },
   },
   { timestamps: true }
 );
@@ -141,5 +154,15 @@ mentorSchema.pre('save', async function (next) {
   }
   next();
 });
+
+mentorSchema.pre('save', async function (next) {
+  if (!this.password || !this.isModified('password')) return next();
+  this.password = await bcrypt.hash(this.password, 12);
+  next();
+});
+
+mentorSchema.methods.comparePassword = async function (candidatePassword) {
+  return bcrypt.compare(candidatePassword, this.password);
+};
 
 module.exports = mongoose.model('Mentor', mentorSchema);
