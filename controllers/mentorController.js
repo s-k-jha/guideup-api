@@ -12,7 +12,27 @@ const getMentors = async (req, res) => {
 
 const createMentor = async (req, res) => {
   try {
-    const { name, email, skills, meetingLink, maxSessionsPerDay } = req.body;
+    const {
+      name,
+      email,
+      skills,
+      meetingLink,
+      maxSessionsPerDay,
+      slug,
+      photoUrl,
+      role,
+      company,
+      experienceYears,
+      bio,
+      domains,
+      linkedinUrl,
+      isPubliclyListed,
+      mentorType,
+      chatPrice,
+      discountPrice,
+      offers,
+      dailyFreeQuota,
+    } = req.body;
 
     if (!name || !email) {
       return errorResponse(res, 'Name and email are required', 400);
@@ -24,6 +44,20 @@ const createMentor = async (req, res) => {
       skills: skills || [],
       meetingLink,
       maxSessionsPerDay: maxSessionsPerDay || 5,
+      slug,
+      photoUrl,
+      role,
+      company,
+      experienceYears,
+      bio,
+      domains: domains || [],
+      linkedinUrl,
+      isPubliclyListed,
+      mentorType,
+      chatPrice,
+      discountPrice,
+      offers,
+      dailyFreeQuota,
     });
 
     return successResponse(res, { mentor }, 'Mentor created', 201);
