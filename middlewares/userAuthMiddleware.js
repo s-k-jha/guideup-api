@@ -1,7 +1,7 @@
 const jwt = require('jsonwebtoken');
 const { errorResponse } = require('../utils/apiResponse');
 
-const protect = (req, res, next) => {
+const protectUser = (req, res, next) => {
   try {
     const authHeader = req.headers.authorization;
 
@@ -13,11 +13,11 @@ const protect = (req, res, next) => {
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-    if (decoded.role !== 'admin') {
+    if (decoded.role !== 'user') {
       return errorResponse(res, 'Invalid token', 401);
     }
 
-    req.admin = decoded;
+    req.user = { id: decoded.id };
     next();
   } catch (error) {
     if (error.name === 'TokenExpiredError') {
@@ -27,4 +27,4 @@ const protect = (req, res, next) => {
   }
 };
 
-module.exports = { protect };
+module.exports = { protectUser };

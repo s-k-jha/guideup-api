@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const validator = require('validator');
+const bcrypt = require('bcryptjs');
 
 const userSchema = new mongoose.Schema(
   {
@@ -29,10 +30,25 @@ const userSchema = new mongoose.Schema(
         message: 'Invalid phone number',
       },
     },
+    password: {
+      type: String,
+      minlength: 8,
+      select: false,
+    },
   },
   { timestamps: true }
 );
 
 userSchema.index({ email: 1 });
+
+userSchema.pre('save', async function (next) {
+  if (!this.password || !this.isModified('password')) return next();
+  this.password = await bcrypt.hash(this.password, 12);
+  next();
+});
+
+userSchema.methods.comparePassword = async function (candidatePassword) {
+  return bcrypt.compare(candidatePassword, this.password);
+};
 
 module.exports = mongoose.model('User', userSchema);

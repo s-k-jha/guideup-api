@@ -16,6 +16,15 @@ const couponRoutes = require('./routes/couponRoutes');
 const mentorRoutes = require('./routes/mentorRoutes');
 const workingHoursRoutes = require('./routes/workingHoursRoutes');
 const meetingRoutes = require('./routes/meetingRoutes');
+const publicMentorRoutes = require('./routes/publicMentorRoutes');
+const mentorApplicationRoutes = require('./routes/mentorApplicationRoutes');
+const categoryRoutes = require('./routes/categoryRoutes');
+const articleRoutes = require('./routes/articleRoutes');
+const adminArticleRoutes = require('./routes/adminArticleRoutes');
+const sitemapRoutes = require('./routes/sitemapRoutes');
+const userAuthRoutes = require('./routes/userAuthRoutes');
+const chatOrderRoutes = require('./routes/chatOrderRoutes');
+const adminChatOrderRoutes = require('./routes/adminChatOrderRoutes');
 
 const app = express();
 
@@ -75,6 +84,16 @@ app.use('/api/admin/coupons', couponRoutes);   // Admin coupon management
 app.use('/api/admin/mentors', mentorRoutes);   // Admin mentor management
 app.use('/api/working-hours', workingHoursRoutes);
 app.use('/api/meeting', meetingRoutes);           // GET /api/meeting/join/:bookingId
+app.use('/api/mentors', publicMentorRoutes);      // Public mentor directory (GET only)
+app.use('/api/mentor-applications', mentorApplicationRoutes); // Public submit + admin review
+app.use('/api/categories', categoryRoutes);       // Public read, admin CRUD
+app.use('/api/admin/categories', categoryRoutes);
+app.use('/api/articles', articleRoutes);          // Public published articles
+app.use('/api/admin/articles', adminArticleRoutes); // Admin article CMS
+app.use('/api/sitemap-data', sitemapRoutes);      // GET sitemap data
+app.use('/api/auth', userAuthRoutes);             // Student register/login/me
+app.use('/api/chat-orders', chatOrderRoutes);     // Student "talk to a mentor" chat orders
+app.use('/api/admin/chat-orders', adminChatOrderRoutes); // Admin chat order visibility
 
 // ─── 404 Handler ────────────────────────────────────────────────────────────
 app.use('*', (req, res) => {
