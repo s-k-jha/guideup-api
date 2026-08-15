@@ -282,6 +282,12 @@ const seedTalkMentors = async () => {
   let upserted = 0;
 
   for (const data of talkMentors) {
+    const femaleNames = ['Priya', 'Sneha', 'Fatima', 'Ananya', 'Meera', 'Nisha', 'Zara', 'Pooja', 'Ritu', 'Kavya', 'Ishita', 'Tanvi', 'Shreya'];
+    const isFemale = femaleNames.some(name => data.name.includes(name));
+    const gender = isFemale ? 'women' : 'men';
+    const photoId = (upserted % 50) + 1; // 1-50
+    const photoUrl = `https://randomuser.me/api/portraits/${gender}/${photoId}.jpg`;
+
     const mentor = await Mentor.findOneAndUpdate(
       { email: data.email },
       {
@@ -296,6 +302,7 @@ const seedTalkMentors = async () => {
         bio: data.bio,
         domains: data.domains,
         chatPrice: data.chatPrice,
+        photoUrl: photoUrl,
         discountPrice: 5,
         offers: { firstFree: true, secondDiscount: true },
         dailyFreeQuota: 20,

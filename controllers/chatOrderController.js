@@ -1,6 +1,10 @@
 const ChatOrder = require('../models/ChatOrder');
+const ChatMessage = require('../models/ChatMessage');
 const Mentor = require('../models/Mentor');
+const User = require('../models/User');
+const WalletTransaction = require('../models/WalletTransaction');
 const { createOrder, verifySignature } = require('../services/paymentService');
+const { notifyMentorNewChat, completeChatOrder } = require('../services/socketService');
 const { successResponse, errorResponse } = require('../utils/apiResponse');
 
 /**
@@ -65,6 +69,9 @@ const createChatOrder = async (req, res) => {
     if (mentor.mentorType !== 'talk') {
       return errorResponse(res, 'Mentor not available for chat', 404);
     }
+    if (mentor.availabilityStatus === 2) {
+      return errorResponse(res, 'This mentor is currently in another chat. Please try again shortly.', 409);
+    }
 
     const tier = await determineTier(req.user.id, mentor);
 
@@ -75,7 +82,6 @@ const createChatOrder = async (req, res) => {
         mentor.freeOrdersUsedToday = 0;
       }
       mentor.freeOrdersUsedToday += 1;
-      await mentor.save();
     }
 
     if (tier === 'free') {
@@ -88,14 +94,28 @@ const createChatOrder = async (req, res) => {
         status: 'confirmed',
       });
 
-      return successResponse(res, { chatOrder, tier, requiresPayment: false }, 'Chat confirmed — no payment required', 201);
+      mentor.availabilityStatus = 2;
+      mentor.activeChatOrderId = chatOrder._id;
+      await mentor.save();
+
+      const student = await User.findById(req.user.id).select('name');
+      notifyMentorNewChat(mentor._id.toString(), {
+        chatOrderId: chatOrder._id,
+        tier,
+        studentName: student?.name,
+      });
+
+      return successResponse(res, { chatOrder, tier, requiresPayment: false, paidVia: 'free' }, 'Chat confirmed — no payment required', 201);
     }
 
-    // discount or paid tier — requires Razorpay payment
+    // discount or paid tier — funded from the student's wallet, not a fresh Razorpay order
     const amount = tier === 'discount' ? mentor.discountPrice : mentor.chatPrice;
-    const amountInPaise = Math.round(amount * 100);
-
-    const order = await createOrder(amountInPaise, `chat_${Date.now()}`);
+    const user = await User.findById(req.user.id);
+    if (!user || user.walletBalance < amount) {
+      return errorResponse(res, 'Insufficient wallet balance. Please recharge your wallet first.', 402);
+    }
+    user.walletBalance -= amount;
+    await user.save();
 
     const chatOrder = await ChatOrder.create({
       userId: req.user.id,
@@ -103,19 +123,29 @@ const createChatOrder = async (req, res) => {
       tier,
       originalPrice: mentor.chatPrice,
       amountPaid: amount,
-      status: 'payment_processing',
-      orderId: order.id,
+      status: 'confirmed',
     });
 
-    return successResponse(res, {
-      chatOrder,
+    await WalletTransaction.create({
+      userId: req.user.id,
+      type: 'debit',
+      amount,
+      status: 'completed',
+      chatOrderId: chatOrder._id,
+      balanceAfter: user.walletBalance,
+    });
+
+    mentor.availabilityStatus = 2;
+    mentor.activeChatOrderId = chatOrder._id;
+    await mentor.save();
+
+    notifyMentorNewChat(mentor._id.toString(), {
+      chatOrderId: chatOrder._id,
       tier,
-      requiresPayment: true,
-      orderId: order.id,
-      amount: amountInPaise,
-      currency: 'INR',
-      keyId: process.env.RAZORPAY_KEY_ID,
-    }, 'Order created');
+      studentName: user.name,
+    });
+
+    return successResponse(res, { chatOrder, tier, requiresPayment: false, paidVia: 'wallet' }, 'Chat confirmed', 201);
   } catch (error) {
     return errorResponse(res, error.message, 500);
   }
@@ -189,10 +219,102 @@ const getAdminChatOrders = async (req, res) => {
   }
 };
 
+/**
+ * GET /api/admin/chat-orders/busy-mentors
+ * protect (admin)
+ * Lists mentors currently showing as busy, with whatever chat order they're
+ * pinned to — the admin queue for spotting a mentor stuck busy after a chat
+ * actually ended.
+ */
+const getBusyMentors = async (req, res) => {
+  try {
+    const mentors = await Mentor.find({ availabilityStatus: 2 })
+      .select('name email photoUrl activeChatOrderId lastActiveAt')
+      .populate({
+        path: 'activeChatOrderId',
+        select: 'tier status createdAt userId',
+        populate: { path: 'userId', select: 'name email' },
+      })
+      .sort({ lastActiveAt: -1 });
+
+    return successResponse(res, { mentors });
+  } catch (error) {
+    return errorResponse(res, error.message, 500);
+  }
+};
+
+/**
+ * POST /api/admin/chat-orders/busy-mentors/:id/refresh
+ * protect (admin)
+ * Force-resets a stuck mentor back to online: completes their linked chat
+ * order if it's still open, then unconditionally clears busy/activeChatOrderId
+ * regardless of what state they were actually in. Doesn't delete anything —
+ * purely a state reset for when a chat ended but the mentor never unstuck.
+ */
+const forceRefreshMentor = async (req, res) => {
+  try {
+    const mentor = await Mentor.findById(req.params.id);
+    if (!mentor) return errorResponse(res, 'Mentor not found', 404);
+
+    if (mentor.activeChatOrderId) {
+      await completeChatOrder(mentor.activeChatOrderId.toString());
+    }
+
+    const updated = await Mentor.findById(req.params.id);
+    if (updated.availabilityStatus !== 1 || updated.activeChatOrderId) {
+      updated.availabilityStatus = 1;
+      updated.activeChatOrderId = null;
+      await updated.save();
+    }
+
+    return successResponse(res, { mentor: updated }, 'Mentor refreshed and marked online');
+  } catch (error) {
+    return errorResponse(res, error.message, 500);
+  }
+};
+
+/**
+ * GET /api/chat-orders/:id
+ * protectChatParticipant
+ */
+const getChatOrderDetails = async (req, res) => {
+  try {
+    const chatOrder = await ChatOrder.findById(req.params.id)
+      .populate('userId', 'name email')
+      .populate('mentorId', 'name photoUrl availabilityStatus');
+
+    if (!chatOrder) return errorResponse(res, 'Chat order not found', 404);
+
+    return successResponse(res, { chatOrder });
+  } catch (error) {
+    return errorResponse(res, error.message, 500);
+  }
+};
+
+/**
+ * GET /api/chat-orders/:id/messages
+ * protectChatParticipant
+ */
+const getChatMessages = async (req, res) => {
+  try {
+    const messages = await ChatMessage.find({ chatOrderId: req.params.id })
+      .sort({ createdAt: 1 })
+      .limit(500);
+
+    return successResponse(res, { messages });
+  } catch (error) {
+    return errorResponse(res, error.message, 500);
+  }
+};
+
 module.exports = {
   getPricing,
   createChatOrder,
   verifyChatPayment,
   getMyChatOrders,
   getAdminChatOrders,
+  getBusyMentors,
+  forceRefreshMentor,
+  getChatOrderDetails,
+  getChatMessages,
 };
