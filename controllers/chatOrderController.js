@@ -1,5 +1,7 @@
 const ChatOrder = require('../models/ChatOrder');
 const Mentor = require('../models/Mentor');
+const User = require('../models/User');
+const WalletTransaction = require('../models/WalletTransaction');
 const { createOrder, verifySignature } = require('../services/paymentService');
 const { successResponse, errorResponse } = require('../utils/apiResponse');
 
@@ -65,6 +67,9 @@ const createChatOrder = async (req, res) => {
     if (mentor.mentorType !== 'talk') {
       return errorResponse(res, 'Mentor not available for chat', 404);
     }
+    if (mentor.availabilityStatus === 2) {
+      return errorResponse(res, 'This mentor is currently in another chat. Please try again shortly.', 409);
+    }
 
     const tier = await determineTier(req.user.id, mentor);
 
@@ -75,7 +80,6 @@ const createChatOrder = async (req, res) => {
         mentor.freeOrdersUsedToday = 0;
       }
       mentor.freeOrdersUsedToday += 1;
-      await mentor.save();
     }
 
     if (tier === 'free') {
@@ -88,14 +92,21 @@ const createChatOrder = async (req, res) => {
         status: 'confirmed',
       });
 
-      return successResponse(res, { chatOrder, tier, requiresPayment: false }, 'Chat confirmed — no payment required', 201);
+      mentor.availabilityStatus = 2;
+      mentor.activeChatOrderId = chatOrder._id;
+      await mentor.save();
+
+      return successResponse(res, { chatOrder, tier, requiresPayment: false, paidVia: 'free' }, 'Chat confirmed — no payment required', 201);
     }
 
-    // discount or paid tier — requires Razorpay payment
+    // discount or paid tier — funded from the student's wallet, not a fresh Razorpay order
     const amount = tier === 'discount' ? mentor.discountPrice : mentor.chatPrice;
-    const amountInPaise = Math.round(amount * 100);
-
-    const order = await createOrder(amountInPaise, `chat_${Date.now()}`);
+    const user = await User.findById(req.user.id);
+    if (!user || user.walletBalance < amount) {
+      return errorResponse(res, 'Insufficient wallet balance. Please recharge your wallet first.', 402);
+    }
+    user.walletBalance -= amount;
+    await user.save();
 
     const chatOrder = await ChatOrder.create({
       userId: req.user.id,
@@ -103,19 +114,23 @@ const createChatOrder = async (req, res) => {
       tier,
       originalPrice: mentor.chatPrice,
       amountPaid: amount,
-      status: 'payment_processing',
-      orderId: order.id,
+      status: 'confirmed',
     });
 
-    return successResponse(res, {
-      chatOrder,
-      tier,
-      requiresPayment: true,
-      orderId: order.id,
-      amount: amountInPaise,
-      currency: 'INR',
-      keyId: process.env.RAZORPAY_KEY_ID,
-    }, 'Order created');
+    await WalletTransaction.create({
+      userId: req.user.id,
+      type: 'debit',
+      amount,
+      status: 'completed',
+      chatOrderId: chatOrder._id,
+      balanceAfter: user.walletBalance,
+    });
+
+    mentor.availabilityStatus = 2;
+    mentor.activeChatOrderId = chatOrder._id;
+    await mentor.save();
+
+    return successResponse(res, { chatOrder, tier, requiresPayment: false, paidVia: 'wallet' }, 'Chat confirmed', 201);
   } catch (error) {
     return errorResponse(res, error.message, 500);
   }

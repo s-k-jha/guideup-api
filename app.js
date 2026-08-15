@@ -26,6 +26,8 @@ const userAuthRoutes = require('./routes/userAuthRoutes');
 const mentorAuthRoutes = require('./routes/mentorAuthRoutes');
 const chatOrderRoutes = require('./routes/chatOrderRoutes');
 const adminChatOrderRoutes = require('./routes/adminChatOrderRoutes');
+const adminFinanceRoutes = require('./routes/adminFinanceRoutes');
+const walletRoutes = require('./routes/walletRoutes');
 
 const app = express();
 
@@ -96,6 +98,8 @@ app.use('/api/auth', userAuthRoutes);             // Student register/login/me
 app.use('/api/mentor-auth', mentorAuthRoutes);    // Mentor self-service login/profile/status
 app.use('/api/chat-orders', chatOrderRoutes);     // Student "talk to a mentor" chat orders
 app.use('/api/admin/chat-orders', adminChatOrderRoutes); // Admin chat order visibility
+app.use('/api/admin/finance', adminFinanceRoutes); // Admin payout/advance request review
+app.use('/api/wallet', walletRoutes);             // Student wallet recharge + balance
 
 // ─── 404 Handler ────────────────────────────────────────────────────────────
 app.use('*', (req, res) => {

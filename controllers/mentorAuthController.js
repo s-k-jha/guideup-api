@@ -93,24 +93,56 @@ const updateMentorMe = async (req, res) => {
 /**
  * PATCH /api/mentor-auth/status
  * protectMentor
+ * Mentors may only self-select 0 (offline) or 1 (online). Busy (2) is system-managed —
+ * it is set automatically when a chat is confirmed for the mentor and cleared when the
+ * mentor ends the active chat (see mentorFinanceController.endActiveChat).
  */
 const updateMentorStatus = async (req, res) => {
   try {
     const { availabilityStatus } = req.body;
 
-    if (![0, 1, 2].includes(availabilityStatus)) {
-      return errorResponse(res, 'availabilityStatus must be one of 0, 1, 2', 400, [
-        '0 = unavailable/offline, 1 = online, 2 = busy',
-      ]);
+    if (![0, 1].includes(availabilityStatus)) {
+      return errorResponse(
+        res,
+        'availabilityStatus must be 0 (offline) or 1 (online) — busy is set automatically while you are in an active chat',
+        400
+      );
     }
 
-    const mentor = await Mentor.findByIdAndUpdate(
-      req.mentor.id,
-      { availabilityStatus },
-      { new: true }
-    );
-
+    const mentor = await Mentor.findById(req.mentor.id);
     if (!mentor) return errorResponse(res, 'Mentor not found', 404);
+
+    if (mentor.availabilityStatus === 2) {
+      return errorResponse(
+        res,
+        'You are currently in an active chat. End it first from your dashboard.',
+        409
+      );
+    }
+
+    const today = new Date().toISOString().slice(0, 10);
+
+    if (mentor.availabilityStatus === 0 && availabilityStatus === 1) {
+      if (mentor.presenceDate !== today) {
+        mentor.presenceMinutesToday = 0;
+        mentor.presenceDate = today;
+      }
+      mentor.lastActiveAt = new Date();
+    } else if (mentor.availabilityStatus === 1 && availabilityStatus === 0) {
+      if (mentor.lastActiveAt) {
+        const elapsedMinutes = (Date.now() - mentor.lastActiveAt.getTime()) / 60000;
+        if (mentor.presenceDate !== today) {
+          mentor.presenceMinutesToday = 0;
+          mentor.presenceDate = today;
+        }
+        mentor.presenceMinutesToday += elapsedMinutes;
+        mentor.lastActiveAt = null;
+      }
+    }
+
+    mentor.availabilityStatus = availabilityStatus;
+    await mentor.save();
+
     return successResponse(res, { mentor }, 'Status updated');
   } catch (error) {
     return errorResponse(res, error.message, 500);

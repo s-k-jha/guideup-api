@@ -124,6 +124,38 @@ const mentorSchema = new mongoose.Schema(
       enum: [0, 1, 2],
       default: 0,
     },
+    bankDetails: {
+      accountHolderName: { type: String, trim: true },
+      accountNumber: { type: String, trim: true },
+      ifsc: { type: String, trim: true, uppercase: true },
+      upiId: { type: String, trim: true },
+    },
+    presenceMinutesToday: {
+      type: Number,
+      default: 0,
+    },
+    // 'YYYY-MM-DD' — lazy-reset date marker, same pattern as freeOrdersDate.
+    presenceDate: {
+      type: String,
+      default: null,
+    },
+    // Set when the mentor transitions offline(0) -> online(1); used to compute elapsed
+    // presence minutes. Busy(2) does not reset or pause this clock.
+    lastActiveAt: {
+      type: Date,
+      default: null,
+    },
+    // The mentor's current in-progress chat, if any.
+    activeChatOrderId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'ChatOrder',
+      default: null,
+    },
+    // Running total of payout/advance requests admin has marked 'paid'.
+    totalPaidOut: {
+      type: Number,
+      default: 0,
+    },
   },
   { timestamps: true }
 );
