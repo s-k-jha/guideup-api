@@ -14,7 +14,7 @@ const getPublicMentors = async (req, res) => {
     }
 
     const mentors = await Mentor.find(filter)
-      .select('name slug photoUrl role company experienceYears bio domains skills mentorType chatPrice discountPrice availabilityStatus')
+      .select('name slug photoUrl linkedinUrl role company experienceYears bio domains skills mentorType chatPrice discountPrice offers availabilityStatus')
       .sort({ createdAt: -1 });
 
     return successResponse(res, { mentors });
