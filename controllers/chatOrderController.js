@@ -1,8 +1,10 @@
 const ChatOrder = require('../models/ChatOrder');
+const ChatMessage = require('../models/ChatMessage');
 const Mentor = require('../models/Mentor');
 const User = require('../models/User');
 const WalletTransaction = require('../models/WalletTransaction');
 const { createOrder, verifySignature } = require('../services/paymentService');
+const { notifyMentorNewChat } = require('../services/socketService');
 const { successResponse, errorResponse } = require('../utils/apiResponse');
 
 /**
@@ -96,6 +98,13 @@ const createChatOrder = async (req, res) => {
       mentor.activeChatOrderId = chatOrder._id;
       await mentor.save();
 
+      const student = await User.findById(req.user.id).select('name');
+      notifyMentorNewChat(mentor._id.toString(), {
+        chatOrderId: chatOrder._id,
+        tier,
+        studentName: student?.name,
+      });
+
       return successResponse(res, { chatOrder, tier, requiresPayment: false, paidVia: 'free' }, 'Chat confirmed — no payment required', 201);
     }
 
@@ -129,6 +138,12 @@ const createChatOrder = async (req, res) => {
     mentor.availabilityStatus = 2;
     mentor.activeChatOrderId = chatOrder._id;
     await mentor.save();
+
+    notifyMentorNewChat(mentor._id.toString(), {
+      chatOrderId: chatOrder._id,
+      tier,
+      studentName: user.name,
+    });
 
     return successResponse(res, { chatOrder, tier, requiresPayment: false, paidVia: 'wallet' }, 'Chat confirmed', 201);
   } catch (error) {
@@ -204,10 +219,46 @@ const getAdminChatOrders = async (req, res) => {
   }
 };
 
+/**
+ * GET /api/chat-orders/:id
+ * protectChatParticipant
+ */
+const getChatOrderDetails = async (req, res) => {
+  try {
+    const chatOrder = await ChatOrder.findById(req.params.id)
+      .populate('userId', 'name email')
+      .populate('mentorId', 'name photoUrl availabilityStatus');
+
+    if (!chatOrder) return errorResponse(res, 'Chat order not found', 404);
+
+    return successResponse(res, { chatOrder });
+  } catch (error) {
+    return errorResponse(res, error.message, 500);
+  }
+};
+
+/**
+ * GET /api/chat-orders/:id/messages
+ * protectChatParticipant
+ */
+const getChatMessages = async (req, res) => {
+  try {
+    const messages = await ChatMessage.find({ chatOrderId: req.params.id })
+      .sort({ createdAt: 1 })
+      .limit(500);
+
+    return successResponse(res, { messages });
+  } catch (error) {
+    return errorResponse(res, error.message, 500);
+  }
+};
+
 module.exports = {
   getPricing,
   createChatOrder,
   verifyChatPayment,
   getMyChatOrders,
   getAdminChatOrders,
+  getChatOrderDetails,
+  getChatMessages,
 };
