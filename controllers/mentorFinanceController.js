@@ -2,7 +2,7 @@ const Mentor = require('../models/Mentor');
 const ChatOrder = require('../models/ChatOrder');
 const PayoutRequest = require('../models/PayoutRequest');
 const AdvanceRequest = require('../models/AdvanceRequest');
-const { notifyChatEnded } = require('../services/socketService');
+const { completeChatOrder } = require('../services/socketService');
 const { successResponse, errorResponse } = require('../utils/apiResponse');
 
 const COMMISSION_RATE = 0.4;
@@ -304,21 +304,10 @@ const endActiveChat = async (req, res) => {
       return errorResponse(res, 'No active chat to end', 400);
     }
 
-    const chatOrder = await ChatOrder.findById(mentor.activeChatOrderId);
-    if (chatOrder) {
-      chatOrder.status = 'completed';
-      await chatOrder.save();
-    }
+    await completeChatOrder(mentor.activeChatOrderId.toString());
 
-    mentor.availabilityStatus = 1;
-    mentor.activeChatOrderId = null;
-    await mentor.save();
-
-    if (chatOrder) {
-      notifyChatEnded(chatOrder._id.toString());
-    }
-
-    return successResponse(res, { mentor }, 'Chat ended');
+    const updatedMentor = await Mentor.findById(req.mentor.id);
+    return successResponse(res, { mentor: updatedMentor }, 'Chat ended');
   } catch (error) {
     return errorResponse(res, error.message, 500);
   }
