@@ -2,6 +2,7 @@ const jwt = require('jsonwebtoken');
 const ChatOrder = require('../models/ChatOrder');
 const ChatMessage = require('../models/ChatMessage');
 const Mentor = require('../models/Mentor');
+const llmService = require('./llmService');
 
 // Module-level reference to the Socket.IO server instance, set by initSocket().
 let io = null;
@@ -72,6 +73,85 @@ const completeChatOrder = async (chatOrderId) => {
 };
 
 /**
+ * Roughly how long a person would take to type `text` in a chat, so the AI's
+ * reply doesn't land instantly (which reads as obviously automated). Not a
+ * disclosure mechanism either way — the AI badge/banner already handles
+ * that — purely pacing, the same idea as a "typing…" indicator in any chat
+ * app. Clamped so it never meaningfully eats into the 2-minute session.
+ */
+function estimateTypingDelayMs(text) {
+  const READING_PAUSE_MS = 400;
+  const MS_PER_CHAR = 20;
+  const MIN_DELAY_MS = 1200;
+  const MAX_DELAY_MS = 6000;
+  const base = READING_PAUSE_MS + text.length * MS_PER_CHAR;
+  const jittered = base * (0.85 + Math.random() * 0.3); // ±15%
+  return Math.max(MIN_DELAY_MS, Math.min(MAX_DELAY_MS, Math.round(jittered)));
+}
+
+/**
+ * Generates and posts an AI reply for an `aiHandled` chat order, after the
+ * student's message has already been persisted and broadcast. Never throws
+ * out of the caller — on any failure it posts a short graceful fallback
+ * message instead, so the student is never left in silence. An in-flight
+ * guard (`presence.aiReplying`) prevents overlapping replies if the student
+ * fires several messages before the first one lands.
+ */
+async function triggerAiReply(chatOrderId, chatOrder) {
+  const presence = roomPresence.get(chatOrderId);
+  if (presence?.aiReplying) return;
+  if (presence) presence.aiReplying = true;
+
+  try {
+    const [mentor, history] = await Promise.all([
+      Mentor.findById(chatOrder.mentorId),
+      ChatMessage.find({ chatOrderId }).sort({ createdAt: 1 }).limit(30),
+    ]);
+
+    const replyText = await llmService.generateMentorReply({
+      mentor,
+      history,
+      studentMessage: history[history.length - 1]?.text || '',
+    });
+
+    // Human-paced delivery — see estimateTypingDelayMs.
+    await new Promise((resolve) => setTimeout(resolve, estimateTypingDelayMs(replyText)));
+
+    // The order may have completed (timer ran out) while the LLM call/delay
+    // was in flight — don't post a reply into a chat that already ended.
+    const freshOrder = await ChatOrder.findById(chatOrderId).select('status');
+    if (!freshOrder || freshOrder.status === 'completed') return;
+
+    const aiMessage = await ChatMessage.create({
+      chatOrderId,
+      senderRole: 'mentor',
+      senderId: chatOrder.mentorId,
+      text: replyText,
+      senderIsAi: true,
+    });
+    io.to(`chat:${chatOrderId}`).emit('chat:message', aiMessage.toObject());
+  } catch (error) {
+    try {
+      const freshOrder = await ChatOrder.findById(chatOrderId).select('status');
+      if (freshOrder && freshOrder.status !== 'completed') {
+        const fallback = await ChatMessage.create({
+          chatOrderId,
+          senderRole: 'mentor',
+          senderId: chatOrder.mentorId,
+          text: "Sorry, I'm having trouble responding right now. Please try rephrasing your question.",
+          senderIsAi: true,
+        });
+        io.to(`chat:${chatOrderId}`).emit('chat:message', fallback.toObject());
+      }
+    } catch (_) {
+      // Swallow — never let a fallback-posting failure crash the socket handler.
+    }
+  } finally {
+    if (presence) presence.aiReplying = false;
+  }
+}
+
+/**
  * Initializes Socket.IO on top of the given HTTP server. Call once from server.js.
  */
 const initSocket = (httpServer) => {
@@ -128,8 +208,14 @@ const initSocket = (httpServer) => {
 
         const otherRole = socket.role === 'user' ? 'mentor' : 'user';
         const otherPresent = presence[otherRole].size > 0;
+        // AI-handled orders have no human mentor socket that will ever join
+        // this room — the student's own join is sufficient to start. For
+        // every existing/non-AI order `chatOrder.aiHandled` is false (schema
+        // default), so this collapses to exactly the original `otherPresent`
+        // check — zero behavior change on the human-mentor path.
+        const shouldStart = chatOrder.aiHandled ? socket.role === 'user' : otherPresent;
 
-        if (otherPresent && !presence.started) {
+        if (shouldStart && !presence.started) {
           presence.started = true;
           const durationMs = (chatOrder.durationMinutes || 2) * 60 * 1000;
           presence.endsAt = Date.now() + durationMs;
@@ -137,13 +223,15 @@ const initSocket = (httpServer) => {
             completeChatOrder(chatOrderId).catch(() => {});
           }, durationMs);
 
-          // Tell whichever participant was already waiting that their
-          // partner just joined and the clock has started now — excludes
-          // the socket that triggered this (they get endsAt via their ack).
-          socket.to(`chat:${chatOrderId}`).emit('chat:partnerJoined', {
-            role: socket.role,
-            endsAt: presence.endsAt,
-          });
+          if (!chatOrder.aiHandled) {
+            // Tell whichever participant was already waiting that their
+            // partner just joined and the clock has started now — excludes
+            // the socket that triggered this (they get endsAt via their ack).
+            socket.to(`chat:${chatOrderId}`).emit('chat:partnerJoined', {
+              role: socket.role,
+              endsAt: presence.endsAt,
+            });
+          }
         }
 
         callback?.({ success: true, endsAt: presence.endsAt });
@@ -182,6 +270,10 @@ const initSocket = (httpServer) => {
 
         io.to(`chat:${chatOrderId}`).emit('chat:message', messagePlain);
         callback?.({ success: true, message: messagePlain });
+
+        if (chatOrder.aiHandled && socket.role === 'user') {
+          triggerAiReply(chatOrderId, chatOrder).catch(() => {});
+        }
       } catch (error) {
         callback?.({ error: 'Not authorized for this chat' });
       }
