@@ -134,17 +134,18 @@ const verifyPayment = async (req, res) => {
       return errorResponse(res, 'Payment verification failed. Invalid signature.', 400);
     }
 
-    // Find the pending booking
-    const booking = await Booking.findOne({ orderId: razorpay_order_id, status: 'payment_processing' });
+    // Atomically claim the pending booking — matching and flipping status in
+    // one query stops a concurrent/replayed verify call from also matching
+    // 'payment_processing' and running the confirmation flow (duplicate
+    // confirmation emails, coupon usage counted twice) a second time.
+    const booking = await Booking.findOneAndUpdate(
+      { orderId: razorpay_order_id, status: 'payment_processing' },
+      { status: 'confirmed', paymentId: razorpay_payment_id }
+    );
 
     if (!booking) {
-      return errorResponse(res, 'Booking not found for this order', 404);
+      return errorResponse(res, 'Booking not found or already confirmed for this order', 404);
     }
-
-    // Confirm booking
-    booking.status = 'confirmed';
-    booking.paymentId = razorpay_payment_id;
-    await booking.save();
 
     // Release slot lock (it's now properly booked)
     removeLockByOrderId(razorpay_order_id);

@@ -109,14 +109,20 @@ const createChatOrder = async (req, res) => {
       return successResponse(res, { chatOrder, tier, requiresPayment: false, paidVia: 'free' }, 'Chat confirmed — no payment required', 201);
     }
 
-    // discount or paid tier — funded from the student's wallet, not a fresh Razorpay order
+    // discount or paid tier — funded from the student's wallet, not a fresh Razorpay order.
+    // The balance check and the debit happen in one atomic update (filtering
+    // on walletBalance >= amount) so two concurrent chat purchases can't both
+    // read the same starting balance and both succeed — that race would let
+    // a student spend more than their wallet actually has.
     const amount = tier === 'discount' ? mentor.discountPrice : mentor.chatPrice;
-    const user = await User.findById(req.user.id);
-    if (!user || user.walletBalance < amount) {
+    const user = await User.findOneAndUpdate(
+      { _id: req.user.id, walletBalance: { $gte: amount } },
+      { $inc: { walletBalance: -amount } },
+      { new: true }
+    );
+    if (!user) {
       return errorResponse(res, 'Insufficient wallet balance. Please recharge your wallet first.', 402);
     }
-    user.walletBalance -= amount;
-    await user.save();
 
     const chatOrder = await ChatOrder.create({
       userId: req.user.id,
@@ -170,15 +176,15 @@ const verifyChatPayment = async (req, res) => {
       return errorResponse(res, 'Payment verification failed. Invalid signature.', 400);
     }
 
-    const chatOrder = await ChatOrder.findOne({ orderId: razorpay_order_id, status: 'payment_processing' });
+    const chatOrder = await ChatOrder.findOneAndUpdate(
+      { orderId: razorpay_order_id, status: 'payment_processing' },
+      { status: 'confirmed', paymentId: razorpay_payment_id },
+      { new: true }
+    );
 
     if (!chatOrder) {
-      return errorResponse(res, 'Chat order not found for this order', 404);
+      return errorResponse(res, 'Chat order not found or already confirmed for this order', 404);
     }
-
-    chatOrder.status = 'confirmed';
-    chatOrder.paymentId = razorpay_payment_id;
-    await chatOrder.save();
 
     return successResponse(res, { chatOrder }, 'Payment verified. Chat confirmed!');
   } catch (error) {

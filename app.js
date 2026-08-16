@@ -28,6 +28,8 @@ const chatOrderRoutes = require('./routes/chatOrderRoutes');
 const adminChatOrderRoutes = require('./routes/adminChatOrderRoutes');
 const adminFinanceRoutes = require('./routes/adminFinanceRoutes');
 const walletRoutes = require('./routes/walletRoutes');
+const reviewRoutes = require('./routes/reviewRoutes');
+const adminReviewRoutes = require('./routes/adminReviewRoutes');
 
 const app = express();
 
@@ -100,6 +102,8 @@ app.use('/api/chat-orders', chatOrderRoutes);     // Student "talk to a mentor" 
 app.use('/api/admin/chat-orders', adminChatOrderRoutes); // Admin chat order visibility
 app.use('/api/admin/finance', adminFinanceRoutes); // Admin payout/advance request review
 app.use('/api/wallet', walletRoutes);             // Student wallet recharge + balance
+app.use('/api/reviews', reviewRoutes);            // Student mentor/platform review submission
+app.use('/api/admin/reviews', adminReviewRoutes); // Admin review visibility
 
 // ─── 404 Handler ────────────────────────────────────────────────────────────
 app.use('*', (req, res) => {

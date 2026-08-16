@@ -43,6 +43,14 @@ const chatOrderSchema = new mongoose.Schema(
       type: String,
       default: null,
     },
+    mentorReviewed: {
+      type: Boolean,
+      default: false,
+    },
+    platformReviewed: {
+      type: Boolean,
+      default: false,
+    },
   },
   { timestamps: true }
 );

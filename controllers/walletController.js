@@ -100,25 +100,30 @@ const verifyRecharge = async (req, res) => {
       return errorResponse(res, 'Payment verification failed. Invalid signature.', 400);
     }
 
-    const transaction = await WalletTransaction.findOne({
-      orderId: razorpay_order_id,
-      status: 'pending',
-    });
+    // Atomically claim the pending transaction by flipping it to 'completed'
+    // in the same query that finds it — this is the only thing standing
+    // between "one real Razorpay payment" and "wallet credited N times" if
+    // this endpoint is called concurrently (double-click, or a replayed
+    // request — the signature stays valid forever for the same payment, so
+    // nothing else here would stop a race). Only one concurrent caller can
+    // match `status: 'pending'`; the rest see it already flipped and 404.
+    const transaction = await WalletTransaction.findOneAndUpdate(
+      { orderId: razorpay_order_id, status: 'pending' },
+      { status: 'completed', paymentId: razorpay_payment_id }
+    );
 
     if (!transaction) {
-      return errorResponse(res, 'Wallet transaction not found for this order', 404);
+      return errorResponse(res, 'Wallet transaction not found or already processed for this order', 404);
     }
 
-    const user = await User.findById(transaction.userId);
+    const user = await User.findByIdAndUpdate(
+      transaction.userId,
+      { $inc: { walletBalance: transaction.amount } },
+      { new: true }
+    );
     if (!user) return errorResponse(res, 'User not found', 404);
 
-    user.walletBalance += transaction.amount;
-    await user.save();
-
-    transaction.status = 'completed';
-    transaction.paymentId = razorpay_payment_id;
-    transaction.balanceAfter = user.walletBalance;
-    await transaction.save();
+    await WalletTransaction.updateOne({ _id: transaction._id }, { balanceAfter: user.walletBalance });
 
     return successResponse(res, { walletBalance: user.walletBalance }, 'Wallet recharged');
   } catch (error) {
