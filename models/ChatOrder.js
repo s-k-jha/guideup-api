@@ -51,6 +51,13 @@ const chatOrderSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    // Snapshotted once at creation from the global AI-chat setting — never
+    // mutated afterward, so toggling the admin flag later doesn't change
+    // the identity of in-flight or past chats.
+    aiHandled: {
+      type: Boolean,
+      default: false,
+    },
   },
   { timestamps: true }
 );

@@ -30,6 +30,7 @@ const adminFinanceRoutes = require('./routes/adminFinanceRoutes');
 const walletRoutes = require('./routes/walletRoutes');
 const reviewRoutes = require('./routes/reviewRoutes');
 const adminReviewRoutes = require('./routes/adminReviewRoutes');
+const adminSettingsRoutes = require('./routes/adminSettingsRoutes');
 
 const app = express();
 
@@ -104,6 +105,7 @@ app.use('/api/admin/finance', adminFinanceRoutes); // Admin payout/advance reque
 app.use('/api/wallet', walletRoutes);             // Student wallet recharge + balance
 app.use('/api/reviews', reviewRoutes);            // Student mentor/platform review submission
 app.use('/api/admin/reviews', adminReviewRoutes); // Admin review visibility
+app.use('/api/admin/settings', adminSettingsRoutes); // Admin global feature toggles (e.g. AI chat)
 
 // ─── 404 Handler ────────────────────────────────────────────────────────────
 app.use('*', (req, res) => {

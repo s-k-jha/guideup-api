@@ -5,6 +5,7 @@ const User = require('../models/User');
 const WalletTransaction = require('../models/WalletTransaction');
 const { createOrder, verifySignature } = require('../services/paymentService');
 const { notifyMentorNewChat, completeChatOrder } = require('../services/socketService');
+const settingsService = require('../services/settingsService');
 const { successResponse, errorResponse } = require('../utils/apiResponse');
 
 /**
@@ -74,6 +75,11 @@ const createChatOrder = async (req, res) => {
       return errorResponse(res, 'This mentor is currently in another chat. Please try again shortly.', 409);
     }
 
+    // Snapshotted once, at creation time — toggling the admin flag later
+    // doesn't retroactively change an in-flight or past chat's identity.
+    const settings = await settingsService.getSettings();
+    const aiHandled = settings.aiChatEnabled === true;
+
     const tier = await determineTier(req.user.id, mentor);
 
     if (tier === 'free' || tier === 'discount') {
@@ -93,18 +99,23 @@ const createChatOrder = async (req, res) => {
         originalPrice: mentor.chatPrice,
         amountPaid: 0,
         status: 'confirmed',
+        aiHandled,
       });
 
-      mentor.availabilityStatus = 2;
-      mentor.activeChatOrderId = chatOrder._id;
-      await mentor.save();
+      // An AI-handled order never consumes the real mentor's live capacity —
+      // there's no human who needs to be marked busy or paged for it.
+      if (!aiHandled) {
+        mentor.availabilityStatus = 2;
+        mentor.activeChatOrderId = chatOrder._id;
+        await mentor.save();
 
-      const student = await User.findById(req.user.id).select('name');
-      notifyMentorNewChat(mentor._id.toString(), {
-        chatOrderId: chatOrder._id,
-        tier,
-        studentName: student?.name,
-      });
+        const student = await User.findById(req.user.id).select('name');
+        notifyMentorNewChat(mentor._id.toString(), {
+          chatOrderId: chatOrder._id,
+          tier,
+          studentName: student?.name,
+        });
+      }
 
       return successResponse(res, { chatOrder, tier, requiresPayment: false, paidVia: 'free' }, 'Chat confirmed — no payment required', 201);
     }
@@ -131,6 +142,7 @@ const createChatOrder = async (req, res) => {
       originalPrice: mentor.chatPrice,
       amountPaid: amount,
       status: 'confirmed',
+      aiHandled,
     });
 
     await WalletTransaction.create({
@@ -142,15 +154,17 @@ const createChatOrder = async (req, res) => {
       balanceAfter: user.walletBalance,
     });
 
-    mentor.availabilityStatus = 2;
-    mentor.activeChatOrderId = chatOrder._id;
-    await mentor.save();
+    if (!aiHandled) {
+      mentor.availabilityStatus = 2;
+      mentor.activeChatOrderId = chatOrder._id;
+      await mentor.save();
 
-    notifyMentorNewChat(mentor._id.toString(), {
-      chatOrderId: chatOrder._id,
-      tier,
-      studentName: user.name,
-    });
+      notifyMentorNewChat(mentor._id.toString(), {
+        chatOrderId: chatOrder._id,
+        tier,
+        studentName: user.name,
+      });
+    }
 
     return successResponse(res, { chatOrder, tier, requiresPayment: false, paidVia: 'wallet' }, 'Chat confirmed', 201);
   } catch (error) {
