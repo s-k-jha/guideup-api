@@ -8,14 +8,15 @@ const { notifyMentorNewChat, completeChatOrder } = require('../services/socketSe
 const { successResponse, errorResponse } = require('../utils/apiResponse');
 
 /**
- * Determines which pricing tier a student gets for their next chat
- * with a given mentor, based on how many prior confirmed/completed
- * chats they've had with that mentor and the mentor's own offer toggles.
+ * Determines which pricing tier a student gets for their next chat,
+ * based on how many prior confirmed/completed chats they've had with
+ * ANY mentor (the free/discount offer is per-user, not per-mentor —
+ * a student can't re-trigger "first free" by switching mentors) and
+ * this mentor's own offer toggles.
  */
 async function determineTier(userId, mentor) {
   const priorCount = await ChatOrder.countDocuments({
     userId,
-    mentorId: mentor._id,
     status: { $in: ['confirmed', 'completed'] },
   });
 
