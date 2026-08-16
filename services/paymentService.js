@@ -33,7 +33,12 @@ const verifySignature = (orderId, paymentId, signature) => {
     .update(body)
     .digest('hex');
 
-  return expectedSignature === signature;
+  // Constant-time comparison — a plain `===` leaks timing information an
+  // attacker could use to brute-force the signature byte by byte.
+  const expected = Buffer.from(expectedSignature, 'utf8');
+  const actual = Buffer.from(typeof signature === 'string' ? signature : '', 'utf8');
+  if (expected.length !== actual.length) return false;
+  return crypto.timingSafeEqual(expected, actual);
 };
 
 module.exports = { createOrder, verifySignature };
