@@ -33,6 +33,8 @@ const adminReviewRoutes = require('./routes/adminReviewRoutes');
 const adminSettingsRoutes = require('./routes/adminSettingsRoutes');
 const noteRoutes = require('./routes/noteRoutes');
 const adminNoteRoutes = require('./routes/adminNoteRoutes');
+const trackRoutes = require('./routes/trackRoutes');
+const adminAnalyticsRoutes = require('./routes/adminAnalyticsRoutes');
 
 const app = express();
 
@@ -110,6 +112,8 @@ app.use('/api/admin/reviews', adminReviewRoutes); // Admin review visibility
 app.use('/api/admin/settings', adminSettingsRoutes); // Admin global feature toggles (e.g. AI chat)
 app.use('/api/notes', noteRoutes);                // Student notes library (sign-in required)
 app.use('/api/admin/notes', adminNoteRoutes);     // Admin notes CMS (Cloudinary-backed uploads)
+app.use('/api/track', trackRoutes);               // Public page-view beacon (visitor analytics)
+app.use('/api/admin/analytics', adminAnalyticsRoutes); // Admin visitor analytics dashboard
 
 // ─── 404 Handler ────────────────────────────────────────────────────────────
 app.use('*', (req, res) => {
