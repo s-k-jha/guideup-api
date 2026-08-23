@@ -25,6 +25,12 @@ const errorHandler = (err, req, res, next) => {
     return errorResponse(res, 'Invalid token', 401);
   }
 
+  // Multer upload errors (file too large, wrong field name, etc.)
+  if (err.name === 'MulterError') {
+    const message = err.code === 'LIMIT_FILE_SIZE' ? 'File is too large (max 20MB).' : err.message;
+    return errorResponse(res, message, 400);
+  }
+
   // Default
   return errorResponse(res, err.message || 'Internal server error', err.statusCode || 500);
 };

@@ -31,6 +31,8 @@ const walletRoutes = require('./routes/walletRoutes');
 const reviewRoutes = require('./routes/reviewRoutes');
 const adminReviewRoutes = require('./routes/adminReviewRoutes');
 const adminSettingsRoutes = require('./routes/adminSettingsRoutes');
+const noteRoutes = require('./routes/noteRoutes');
+const adminNoteRoutes = require('./routes/adminNoteRoutes');
 
 const app = express();
 
@@ -106,6 +108,8 @@ app.use('/api/wallet', walletRoutes);             // Student wallet recharge + b
 app.use('/api/reviews', reviewRoutes);            // Student mentor/platform review submission
 app.use('/api/admin/reviews', adminReviewRoutes); // Admin review visibility
 app.use('/api/admin/settings', adminSettingsRoutes); // Admin global feature toggles (e.g. AI chat)
+app.use('/api/notes', noteRoutes);                // Student notes library (sign-in required)
+app.use('/api/admin/notes', adminNoteRoutes);     // Admin notes CMS (Cloudinary-backed uploads)
 
 // ─── 404 Handler ────────────────────────────────────────────────────────────
 app.use('*', (req, res) => {
