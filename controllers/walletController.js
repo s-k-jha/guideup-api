@@ -2,6 +2,7 @@ const User = require('../models/User');
 const Mentor = require('../models/Mentor');
 const WalletTransaction = require('../models/WalletTransaction');
 const { createOrder, verifySignature } = require('../services/paymentService');
+const adminNotifyService = require('../services/adminNotifyService');
 const { successResponse, errorResponse } = require('../utils/apiResponse');
 
 /**
@@ -124,6 +125,8 @@ const verifyRecharge = async (req, res) => {
     if (!user) return errorResponse(res, 'User not found', 404);
 
     await WalletTransaction.updateOne({ _id: transaction._id }, { balanceAfter: user.walletBalance });
+
+    adminNotifyService.notifyWalletRecharge(user, transaction.amount);
 
     return successResponse(res, { walletBalance: user.walletBalance }, 'Wallet recharged');
   } catch (error) {

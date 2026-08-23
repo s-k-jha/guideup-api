@@ -3,6 +3,7 @@ const ChatOrder = require('../models/ChatOrder');
 const PayoutRequest = require('../models/PayoutRequest');
 const AdvanceRequest = require('../models/AdvanceRequest');
 const { completeChatOrder } = require('../services/socketService');
+const adminNotifyService = require('../services/adminNotifyService');
 const { successResponse, errorResponse } = require('../utils/apiResponse');
 
 const COMMISSION_RATE = 0.4;
@@ -196,6 +197,8 @@ const createPayoutRequest = async (req, res) => {
       status: 'pending',
     });
 
+    adminNotifyService.notifyPayoutRequest(mentor, payoutRequest);
+
     return successResponse(res, { payoutRequest }, 'Payout request submitted', 201);
   } catch (error) {
     return errorResponse(res, error.message, 500);
@@ -269,6 +272,8 @@ const createAdvanceRequest = async (req, res) => {
       maxEligibleAmount,
       status: 'pending',
     });
+
+    adminNotifyService.notifyAdvanceRequest(mentor, advanceRequest);
 
     return successResponse(res, { advanceRequest }, 'Advance request submitted', 201);
   } catch (error) {

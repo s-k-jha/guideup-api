@@ -6,6 +6,7 @@ const WalletTransaction = require('../models/WalletTransaction');
 const { createOrder, verifySignature } = require('../services/paymentService');
 const { notifyMentorNewChat, completeChatOrder } = require('../services/socketService');
 const settingsService = require('../services/settingsService');
+const adminNotifyService = require('../services/adminNotifyService');
 const { successResponse, errorResponse } = require('../utils/apiResponse');
 
 /**
@@ -102,6 +103,8 @@ const createChatOrder = async (req, res) => {
         aiHandled,
       });
 
+      const student = await User.findById(req.user.id).select('name email');
+
       // An AI-handled order never consumes the real mentor's live capacity —
       // there's no human who needs to be marked busy or paged for it.
       if (!aiHandled) {
@@ -109,13 +112,21 @@ const createChatOrder = async (req, res) => {
         mentor.activeChatOrderId = chatOrder._id;
         await mentor.save();
 
-        const student = await User.findById(req.user.id).select('name');
         notifyMentorNewChat(mentor._id.toString(), {
           chatOrderId: chatOrder._id,
           tier,
           studentName: student?.name,
         });
       }
+
+      adminNotifyService.notifyChatOrder({
+        studentName: student?.name,
+        studentEmail: student?.email,
+        mentorName: mentor.name,
+        tier,
+        amountPaid: 0,
+        aiHandled,
+      });
 
       return successResponse(res, { chatOrder, tier, requiresPayment: false, paidVia: 'free' }, 'Chat confirmed — no payment required', 201);
     }
@@ -165,6 +176,15 @@ const createChatOrder = async (req, res) => {
         studentName: user.name,
       });
     }
+
+    adminNotifyService.notifyChatOrder({
+      studentName: user.name,
+      studentEmail: user.email,
+      mentorName: mentor.name,
+      tier,
+      amountPaid: amount,
+      aiHandled,
+    });
 
     return successResponse(res, { chatOrder, tier, requiresPayment: false, paidVia: 'wallet' }, 'Chat confirmed', 201);
   } catch (error) {

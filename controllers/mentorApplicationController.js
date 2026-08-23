@@ -1,5 +1,6 @@
 const validator = require('validator');
 const MentorApplication = require('../models/MentorApplication');
+const adminNotifyService = require('../services/adminNotifyService');
 const { successResponse, errorResponse } = require('../utils/apiResponse');
 
 const APPLICATION_STATUSES = ['pending', 'approved', 'rejected'];
@@ -45,6 +46,8 @@ const submitApplication = async (req, res) => {
       mentorshipTopics,
       availability,
     });
+
+    adminNotifyService.notifyMentorApplication(application);
 
     return successResponse(res, { application }, 'Application submitted', 201);
   } catch (error) {

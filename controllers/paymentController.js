@@ -4,6 +4,7 @@ const User = require('../models/User');
 const { createOrder, verifySignature } = require('../services/paymentService');
 const { validateAndApplyCoupon, incrementCouponUsage } = require('../services/couponService');
 const emailService = require('../services/emailService');
+const adminNotifyService = require('../services/adminNotifyService');
 const { createLock, removeLockByOrderId } = require('../utils/slotLockStore');
 const { timeToMinutes, minutesToTime } = require('../utils/slotGenerator');
 const { successResponse, errorResponse } = require('../utils/apiResponse');
@@ -58,7 +59,7 @@ const createPaymentOrder = async (req, res) => {
 
       const populatedBooking = await Booking.findById(booking._id).populate('userId sessionId');
       await emailService.sendBookingConfirmation(populatedBooking);
-      await emailService.sendAdminBookingAlert(populatedBooking)
+      adminNotifyService.notifyNewBooking(populatedBooking);
 
       if (couponCode && couponResult.valid) {
         await incrementCouponUsage(couponCode);
@@ -158,7 +159,7 @@ const verifyPayment = async (req, res) => {
     // Send confirmation email
     const populatedBooking = await Booking.findById(booking._id).populate('userId sessionId mentorId');
     await emailService.sendBookingConfirmation(populatedBooking);
-    await emailService.sendAdminBookingAlert(populatedBooking);
+    adminNotifyService.notifyNewBooking(populatedBooking);
 
     return successResponse(res, {
       bookingId: booking._id,
